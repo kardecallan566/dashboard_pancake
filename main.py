@@ -93,9 +93,6 @@ app.layout = html.Div(className='flex min-h-screen', children=[
         dcc.Link('Resumo', href='/', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
         dcc.Link('Análise Temporal', href='/temporal', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
         dcc.Link('Análise por Hora e Dia', href='/hour-day', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
-        dcc.Link('Análise por Par', href='/pair', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
-        dcc.Link('Análise de Erros', href='/errors', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
-        dcc.Link('Análise Avançada', href='/advanced', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200')
     ]),
     
     # Conteúdo principal
@@ -136,12 +133,6 @@ def display_page(pathname):
         return temporal.layout()
     elif pathname == '/hour-day':
         return hour_day.layout()
-    elif pathname == '/pair':
-        return pair.layout()
-    elif pathname == '/errors':
-        return errors.layout()
-    elif pathname == '/advanced':
-        return advanced.layout()
     else:
         return resumo.layout()
 
