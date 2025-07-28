@@ -1,8 +1,18 @@
-from dash import html, dcc, Input, Output
+from dash import html, Input, Output
+from dash import dcc
 import plotly.express as px
 import plotly.graph_objects as go
 from utils import df, calculate_metrics
+from typing import cast
 
+options = [{'label': day, 'value': day} for day in df['day_of_week'].unique()] + [{'label': 'Todos', 'value': 'Todos'}]
+options = cast(list[dict[str, str]], options)
+
+def calcular_intervalos_entre_acertos(df, coluna_alvo='acerto_sem_delta'):
+    df = df.sort_values('timestamp')
+    df_acertos = df[df[coluna_alvo] == True].copy()
+    df_acertos['intervalo'] = df_acertos['timestamp'].diff().dt.total_seconds() / 60  # em minutos
+    return df_acertos['intervalo'].dropna()
 
 def contar_acertos_consecutivos_por(df, coluna_grupo, coluna_alvo):
     df_sorted = df.sort_values('timestamp')
@@ -32,7 +42,7 @@ def layout():
         html.H1('Análise por Hora e Dia', className='text-4xl font-bold text-blue-400 mb-6'),
         dcc.Dropdown(
             id='day-filter',
-            options=[{'label': day, 'value': day} for day in df['day_of_week'].unique()] + [{'label': 'Todos', 'value': 'Todos'}],
+            options=options,
             value='Todos',
             className='bg-gray-700 text-white p-2 rounded-lg w-1/2 mb-4'
         ),
@@ -54,6 +64,8 @@ def layout():
 
         html.H2('Sequência de Acertos por Dia da Semana', className='text-xl font-semibold mb-2 text-blue-300'),
         dcc.Graph(id='sequencia-dia'),
+        html.H2('Intervalos Entre Acertos (Sem Delta)', className='text-xl font-semibold mb-2 text-blue-300'),
+        dcc.Graph(id='intervalo-acertos')
     ])
 
 def register_callbacks(app):
@@ -65,10 +77,12 @@ def register_callbacks(app):
         Output('hour-day-heatmap', 'figure'),
         Output('sequencia-hora', 'figure'),
         Output('sequencia-dia', 'figure'),
+        Output('intervalo-acertos', 'figure'),
         Output('loading-hourly', 'style'),
         Output('loading-daily', 'style'),
         Output('loading-period', 'style'),
-        Output('loading-heatmap', 'style')
+        Output('loading-heatmap', 'style'),
+
     ],
     [Input('day-filter', 'value')]
 )
@@ -213,9 +227,50 @@ def register_callbacks(app):
             barmode='group',
             template='plotly_dark'
         )
+        # Cálculo do intervalo entre acertos SEM DELTA
+        intervalos_sem = df[df['acerto_sem_delta'] == True].copy()
+        intervalos_sem['intervalo'] = intervalos_sem['timestamp'].diff().dt.total_seconds() / 60
+        intervalos_sem = intervalos_sem.dropna()
+        intervalos_sem = intervalos_sem[intervalos_sem['intervalo'] > 0]
+
+        # Cálculo do intervalo entre acertos COM DELTA
+        intervalos_com = df[df['acerto_com_delta'] == True].copy()
+        intervalos_com['intervalo'] = intervalos_com['timestamp'].diff().dt.total_seconds() / 60
+        intervalos_com = intervalos_com.dropna()
+        intervalos_com = intervalos_com[intervalos_com['intervalo'] > 0]
+
+        # Gráfico combinado
+        intervalo_fig = go.Figure()
+
+        intervalo_fig.add_trace(go.Bar(
+            x=intervalos_sem['timestamp'],
+            y=intervalos_sem['intervalo'],
+            name='Sem Delta',
+            marker=dict(color='#F59E0B'),
+            hovertemplate='Data: %{x}<br>Minutos: %{y:.2f}<extra></extra>'
+        ))
+
+        intervalo_fig.add_trace(go.Bar(
+            x=intervalos_com['timestamp'],
+            y=intervalos_com['intervalo'],
+            name='Com Delta',
+            marker=dict(color='#10B981'),
+            hovertemplate='Data: %{x}<br>Minutos: %{y:.2f}<extra></extra>'
+        ))
+
+        intervalo_fig.update_layout(
+            title='Tempo entre Acertos (Sem e Com Delta)',
+            xaxis_title='Data',
+            yaxis_title='Intervalo (minutos)',
+            barmode='group',  # barras lado a lado
+            template='plotly_dark',
+            hovermode='x unified',
+            legend=dict(x=0.01, y=0.99, bgcolor='rgba(0,0,0,0)')
+        )
+
 
         return (
     hourly_fig, daily_fig, period_fig, heatmap_fig,
-    sequencia_hora_fig, sequencia_dia_fig,
+    sequencia_hora_fig, sequencia_dia_fig,intervalo_fig,
     {'display': 'none'}, {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
 )
