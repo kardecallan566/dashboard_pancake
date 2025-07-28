@@ -3,9 +3,17 @@ import plotly.graph_objects as go
 from utils import df, calculate_metrics
 import pandas as pd
 
-# Define os DataFrames
-acertos_sem = df[df['acerto_sem_delta'] == True].copy().sort_values('timestamp')
-acertos_com = df[df['acerto_com_delta'] == True].copy().sort_values('timestamp')
+# Parte 1: Cálculo do tempo médio sem e com delta (com outliers removidos)
+limite_max_min = 60  # minutos
+
+df['intervalo_sem_delta'] = df[df['acerto_sem_delta'] == True]['timestamp'].diff().dt.total_seconds() / 60
+df['intervalo_com_delta'] = df[df['acerto_com_delta'] == True]['timestamp'].diff().dt.total_seconds() / 60
+
+media_sem = df['intervalo_sem_delta']
+media_sem = media_sem[(media_sem > 0) & (media_sem < limite_max_min)].mean()
+
+media_com = df['intervalo_com_delta']
+media_com = media_com[(media_com > 0) & (media_com < limite_max_min)].mean()
 
 # Função para calcular blocos de acertos
 def calcular_blocos(acertos, limite_bloco=10):
@@ -46,8 +54,8 @@ def calcular_blocos(acertos, limite_bloco=10):
     df_blocos['acertos_acumulados'] = df_blocos['acertos'].cumsum()
     return df_blocos
 
-df_blocos_sem = calcular_blocos(acertos_sem)
-df_blocos_com = calcular_blocos(acertos_com)
+df_blocos_sem = calcular_blocos(df[df['acerto_sem_delta'] == True])
+df_blocos_com = calcular_blocos(df[df['acerto_com_delta'] == True])
 
 def layout():
     return html.Div([
@@ -62,6 +70,19 @@ def layout():
             className='bg-gray-700 text-white p-2 rounded-lg mb-4'
         ),
         html.Button('Exportar Dados', id='export-button', className='neon-button text-white font-bold py-2 px-4 rounded mb-4'),
+                html.H1('Análise Temporal', className='text-4xl font-bold text-blue-400 mb-6'),
+
+        html.Div([
+            html.Div([
+                html.H4("Média de Intervalo Sem Delta", className='text-blue-200 text-lg'),
+                html.P(f"{media_sem:.2f} minutos", className='text-white text-2xl')
+            ], className='bg-gray-800 p-4 rounded-lg shadow-lg mr-4'),
+
+            html.Div([
+                html.H4("Média de Intervalo Com Delta", className='text-green-200 text-lg'),
+                html.P(f"{media_com:.2f} minutos", className='text-white text-2xl')
+            ], className='bg-gray-800 p-4 rounded-lg shadow-lg'),
+        ], className='flex mb-6'),
 
         html.H2('Evolução Temporal da Taxa de Acerto', className='text-xl font-semibold mb-2 text-blue-300'),
         dcc.Graph(id='temporal-accuracy'),
@@ -136,10 +157,11 @@ def register_callbacks(app):
                                 template='plotly_dark')
 
         # Intervalos SEM DELTA
-        intervalos_sem = acertos_sem.copy()
+        intervalos_sem = df[df['acerto_sem_delta'] == True].copy()
         intervalos_sem['intervalo'] = intervalos_sem['timestamp'].diff().dt.total_seconds() / 60
         intervalos_sem = intervalos_sem.dropna()
-        intervalos_sem = intervalos_sem[intervalos_sem['intervalo'] > 0]
+        intervalos_sem = intervalos_sem[(intervalos_sem['intervalo'] > 0) & (intervalos_sem['intervalo'] < limite_max_min)]
+
 
         intervalo_fig_sem = go.Figure()
         intervalo_fig_sem.add_trace(go.Scatter(
@@ -157,15 +179,16 @@ def register_callbacks(app):
         )
 
         # Intervalos COM DELTA
-        intervalos_com = acertos_com.copy()
-        intervalos_com['intervalo'] = intervalos_com['timestamp'].diff().dt.total_seconds() / 60
-        intervalos_com = intervalos_com.dropna()
-        intervalos_com = intervalos_com[intervalos_com['intervalo'] > 0]
+        intervalos_delta = df[df['acerto_com_delta'] == True].copy()
+        intervalos_delta['intervalo'] = intervalos_delta['timestamp'].diff().dt.total_seconds() / 60
+        intervalos_delta = intervalos_delta.dropna()
+        intervalos_delta = intervalos_delta[(intervalos_delta['intervalo'] > 0) & (intervalos_delta['intervalo'] < limite_max_min)]
+
 
         intervalo_fig_com = go.Figure()
         intervalo_fig_com.add_trace(go.Scatter(
-            x=intervalos_com['timestamp'],
-            y=intervalos_com['intervalo'],
+            x=intervalos_delta['timestamp'],
+            y=intervalos_delta['intervalo'],
             name='Intervalo',
             mode='lines+markers',
             line=dict(color='#22C55E')
