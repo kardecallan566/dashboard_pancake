@@ -2,6 +2,7 @@ from dash import html, dcc, Input, Output
 import plotly.express as px
 import plotly.graph_objects as go
 from utils import df, volatility, calculate_metrics
+import pandas as pd
 
 def layout():
     return html.Div([

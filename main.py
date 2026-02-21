@@ -1,7 +1,7 @@
 import dash
 from dash import html, dcc, Output, Input, State, callback_context
 from dash.dependencies import ALL
-import resumo, temporal, hour_day, pair, errors, advanced
+import resumo, temporal, hour_day, pair, errors, advanced, other
 from utils import df, export_data
 
 # Inicializar o Dash
@@ -93,6 +93,7 @@ app.layout = html.Div(className='flex min-h-screen', children=[
         dcc.Link('Resumo', href='/', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
         dcc.Link('Análise Temporal', href='/temporal', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
         dcc.Link('Análise por Hora e Dia', href='/hour-day', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
+        dcc.Link('Análise por Par', href='/other', className='block py-2 px-4 text-lg text-gray-300 hover:bg-gray-800 hover:text-blue-400 rounded transition duration-200'),
     ]),
     
     # Conteúdo principal
@@ -107,9 +108,7 @@ app.layout = html.Div(className='flex min-h-screen', children=[
 resumo.register_callbacks(app)
 temporal.register_callbacks(app)
 hour_day.register_callbacks(app)
-pair.register_callbacks(app)
-errors.register_callbacks(app)
-advanced.register_callbacks(app)
+other.register_callbacks(app)
 
 # Callback para exportação de dados
 @app.callback(
@@ -133,6 +132,8 @@ def display_page(pathname):
         return temporal.layout()
     elif pathname == '/hour-day':
         return hour_day.layout()
+    elif pathname == '/other':
+        return other.layout()
     else:
         return resumo.layout()
 

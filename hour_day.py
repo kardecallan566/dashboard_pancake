@@ -4,9 +4,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from utils import df, calculate_metrics
 from typing import cast
+import pandas as pd
 
-options = [{'label': day, 'value': day} for day in df['day_of_week'].unique()] + [{'label': 'Todos', 'value': 'Todos'}]
-options = cast(list[dict[str, str]], options)
+options1 = [{'label': day, 'value': day} for day in df['day_of_week'].unique()] + [{'label': 'Todos', 'value': 'Todos'}]
+options = cast(list[dict[str, str]], options1)
 
 def calcular_intervalos_entre_acertos(df, coluna_alvo='acerto_sem_delta'):
     df = df.sort_values('timestamp')
@@ -37,6 +38,31 @@ def contar_acertos_consecutivos_por(df, coluna_grupo, coluna_alvo):
         resultados[grupo] = len(sequencias)
     return resultados
 
+def contar_sequencias_com_intervalo_fixo(df, coluna_alvo='acerto_sem_delta', intervalos=[5, 10, 15, 30, 60]):
+    df = df.sort_values('timestamp')
+    acertos = df[df[coluna_alvo] == True].copy()
+    acertos['timestamp'] = pd.to_datetime(acertos['timestamp'])
+    
+    resultados = []
+
+    for intervalo in intervalos:
+        intervalo_td = pd.Timedelta(minutes=intervalo)
+        sequencias = 0
+        i = 0
+
+        while i < len(acertos) - 1:
+            count = 1
+            while (i + count < len(acertos)) and (acertos.iloc[i + count]['timestamp'] - acertos.iloc[i + count - 1]['timestamp'] == intervalo_td):
+                count += 1
+            if count > 1:
+                sequencias += 1
+                i = i + count  # pula toda a sequência
+            else:
+                i += 1
+        resultados.append({'intervalo_min': intervalo, 'quantidade': sequencias})
+    
+    return pd.DataFrame(resultados)
+
 def layout():
     return html.Div([
         html.H1('Análise por Hora e Dia', className='text-4xl font-bold text-blue-400 mb-6'),
@@ -65,7 +91,11 @@ def layout():
         html.H2('Sequência de Acertos por Dia da Semana', className='text-xl font-semibold mb-2 text-blue-300'),
         dcc.Graph(id='sequencia-dia'),
         html.H2('Intervalos Entre Acertos (Sem Delta)', className='text-xl font-semibold mb-2 text-blue-300'),
-        dcc.Graph(id='intervalo-acertos')
+        dcc.Graph(id='intervalo-acertos'),
+        html.H2('Acertos por Intervalo de Tempo Fixo (10 minutos)', className='text-xl font-semibold mb-2 text-blue-300'),
+        dcc.Graph(id='acertos-por-janela'),
+        html.H2('Sequências com Intervalo Fixo Entre Acertos (Sem Delta)', className='text-xl font-semibold mb-2 text-blue-300'),
+        dcc.Graph(id='sequencia-fixa'),
     ])
 
 def register_callbacks(app):
@@ -78,10 +108,13 @@ def register_callbacks(app):
         Output('sequencia-hora', 'figure'),
         Output('sequencia-dia', 'figure'),
         Output('intervalo-acertos', 'figure'),
+        Output('acertos-por-janela', 'figure'),
+        Output('sequencia-fixa', 'figure'),
         Output('loading-hourly', 'style'),
         Output('loading-daily', 'style'),
         Output('loading-period', 'style'),
         Output('loading-heatmap', 'style'),
+        
 
     ],
     [Input('day-filter', 'value')]
@@ -267,10 +300,68 @@ def register_callbacks(app):
             hovermode='x unified',
             legend=dict(x=0.01, y=0.99, bgcolor='rgba(0,0,0,0)')
         )
+                # Defina o intervalo de tempo fixo (em minutos)
+        intervalo_minutos = 15
+        intervalo_tempo = f'{intervalo_minutos}min'
+
+        # Usar a cópia do DataFrame filtrado para segurança
+        df_intervalado = filtered_df.copy()
+        df_intervalado = df_intervalado.set_index('timestamp')
+        df_intervalado = df_intervalado.sort_index()
+
+        # Arredonda os timestamps para o intervalo desejado
+        df_intervalado['janela'] = df_intervalado.index.floor(intervalo_tempo)
+
+        # Conta acertos SEM DELTA
+        contagem_sem = df_intervalado[df_intervalado['acerto_sem_delta'] == True].groupby('janela').size().reset_index(name='acertos_sem_delta')
+
+        # Conta acertos COM DELTA
+        contagem_com = df_intervalado[df_intervalado['acerto_com_delta'] == True].groupby('janela').size().reset_index(name='acertos_com_delta')
+
+        # Merge
+        contagem_total = pd.merge(contagem_sem, contagem_com, on='janela', how='outer').fillna(0)
+
+        # Gráfico
+        acertos_intervalo_fig = go.Figure()
+        acertos_intervalo_fig.add_trace(go.Bar(
+            x=contagem_total['janela'],
+            y=contagem_total['acertos_sem_delta'],
+            name='Sem Delta',
+            marker_color='#3B82F6'
+        ))
+        acertos_intervalo_fig.add_trace(go.Bar(
+            x=contagem_total['janela'],
+            y=contagem_total['acertos_com_delta'],
+            name='Com Delta',
+            marker_color='#10B981'
+        ))
+        acertos_intervalo_fig.update_layout(
+            title=f'Quantidade de Acertos a Cada {intervalo_minutos} Minutos',
+            xaxis_title='Janela de Tempo',
+            yaxis_title='Quantidade de Acertos',
+            barmode='group',
+            template='plotly_dark',
+            hovermode='x unified'
+        )
+        sequencias_df = contar_sequencias_com_intervalo_fixo(filtered_df, 'acerto_sem_delta')
+
+        fig_intervalos_fixos = go.Figure()
+        fig_intervalos_fixos.add_trace(go.Bar(
+            x=sequencias_df['intervalo_min'],
+            y=sequencias_df['quantidade'],
+            name='Sem Delta',
+            marker_color='#3B82F6'
+        ))
+        fig_intervalos_fixos.update_layout(
+            title='Quantidade de Sequências com Intervalo Fixo Entre Acertos (Sem Delta)',
+            xaxis_title='Intervalo Fixo (min)',
+            yaxis_title='Quantidade de Sequências',
+            template='plotly_dark'
+        )
 
 
         return (
     hourly_fig, daily_fig, period_fig, heatmap_fig,
-    sequencia_hora_fig, sequencia_dia_fig,intervalo_fig,
+    sequencia_hora_fig, sequencia_dia_fig,intervalo_fig,acertos_intervalo_fig,
     {'display': 'none'}, {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
 )
